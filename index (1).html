@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NEXUS FSM</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+<style>
+body {
+    margin:0;
+    font-family:Arial;
+    background:#0f172a;
+    color:white;
+}
+
+/* LOGIN */
+#loginOverlay {
+    position:fixed;
+    width:100%;
+    height:100%;
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    background:#0f172a;
+}
+
+.login-box {
+    background:#1e293b;
+    padding:30px;
+    border-radius:12px;
+    width:300px;
+    text-align:center;
+}
+
+input, select {
+    width:100%;
+    padding:10px;
+    margin:10px 0;
+    border-radius:8px;
+    border:none;
+}
+
+button {
+    padding:10px;
+    width:100%;
+    background:#6366f1;
+    border:none;
+    color:white;
+    border-radius:8px;
+    cursor:pointer;
+}
+
+/* DASHBOARD */
+#dashboard {
+    display:none;
+    padding:20px;
+}
+
+.container {
+    max-width:900px;
+    margin:auto;
+    background:#1e293b;
+    padding:20px;
+    border-radius:12px;
+}
+
+.result-card {
+    background:#111827;
+    margin-top:10px;
+    padding:10px;
+    border-radius:8px;
+}
+</style>
+</head>
+
+<body>
+
+<!-- LOGIN -->
+<div id="loginOverlay">
+    <div class="login-box">
+        <h2>Login</h2>
+        <input type="email" id="email" placeholder="Email">
+        <input type="password" id="password" placeholder="Password">
+        <select id="role">
+            <option>Admin</option>
+            <option>Employee</option>
+            <option>Technician</option>
+        </select>
+        <button onclick="login()">Login</button>
+    </div>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard">
+    <div class="container">
+        <h2>Nearest Technician Finder</h2>
+
+        <input type="text" id="ticketId" placeholder="Ticket ID">
+        <input type="text" id="locationInput" placeholder="Enter City (Delhi, Noida...)">
+
+        <button onclick="fetchLocation()">📍 Fetch Location</button>
+        <button onclick="findNearest()">⚡ Find Nearest Technician</button>
+
+        <div id="results"></div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+// 🔥 SUPABASE CONFIG
+const SUPABASE_URL = "https://tgmxpawrrsxphsmsqfyz.supabase.co";
+const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InRnbXhwYXdycnN4cGhzbXNxZnl6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzYzOTM1MjksImV4cCI6MjA5MTk2OTUyOX0.lbNzIShVRTjkPNsFmH1pBGX6KuI2F7eR1qcKPcD6M3E";
+const supa = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// GLOBAL
+let targetLat = null;
+let targetLng = null;
+
+// LOGIN
+function login(){
+    document.getElementById("loginOverlay").style.display="none";
+    document.getElementById("dashboard").style.display="block";
+}
+
+// 🔥 GET CITY → LAT LNG
+async function fetchLocation(){
+    const place = document.getElementById("locationInput").value;
+
+    if(!place) return alert("Enter location");
+
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${place}`);
+    const data = await res.json();
+
+    if(!data.length) return alert("Location not found");
+
+    targetLat = parseFloat(data[0].lat);
+    targetLng = parseFloat(data[0].lon);
+
+    alert("✅ Location Found: " + place);
+}
+
+// 🔥 DISTANCE FUNCTION
+function getDistance(lat1, lon1, lat2, lon2){
+    const R = 6371;
+    const dLat = (lat2-lat1)*Math.PI/180;
+    const dLon = (lon2-lon1)*Math.PI/180;
+
+    const a = Math.sin(dLat/2)**2 +
+        Math.cos(lat1*Math.PI/180) *
+        Math.cos(lat2*Math.PI/180) *
+        Math.sin(dLon/2)**2;
+
+    return 2*R*Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// 🔥 FIND NEAREST
+async function findNearest(){
+
+    if(!targetLat || !targetLng){
+        alert("Fetch location first");
+        return;
+    }
+
+    const { data, error } = await supa
+        .from("engineer_tracking")
+        .select("*")
+        .eq("status","Available");
+
+    if(error){
+        console.log(error);
+        return;
+    }
+
+    const result = data.map(e => ({
+        ...e,
+        dist: getDistance(targetLat, targetLng, e.latitude, e.longitude)
+    })).sort((a,b)=>a.dist-b.dist);
+
+    const container = document.getElementById("results");
+    container.innerHTML="";
+
+    result.forEach(e=>{
+        container.innerHTML += `
+            <div class="result-card">
+                <b>${e.engineer}</b><br>
+                ID: ${e.employeeId}<br>
+                Distance: ${e.dist.toFixed(2)} KM
+            </div>
+        `;
+    });
+}
+</script>
+
+</body>
+</html>
