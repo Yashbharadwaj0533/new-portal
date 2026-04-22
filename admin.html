@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Innoworq Admin - Live Status</title>
+
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+
+body {
+    font-family: Arial;
+    background: linear-gradient(135deg,#6366f1,#a855f7);
+    min-height:100vh;
+    padding:20px;
+}
+
+.container { max-width:1000px; margin:auto; }
+
+header {
+    background:white;
+    padding:15px 25px;
+    border-radius:12px;
+    margin-bottom:20px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+}
+
+header h1 { color:#6366f1; }
+
+.admin-card {
+    background:white;
+    padding:20px;
+    border-radius:12px;
+}
+
+.filter-controls {
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-bottom:15px;
+}
+
+input, select {
+    padding:8px;
+    border-radius:6px;
+    border:1px solid #ccc;
+}
+
+button {
+    background:#6366f1;
+    color:white;
+    border:none;
+    padding:8px 12px;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+#map {
+    height:500px;
+    border-radius:10px;
+}
+
+/* Marker Colors */
+.custom-marker {
+    width:16px;
+    height:16px;
+    border-radius:50%;
+    border:2px solid white;
+}
+.bg-available { background:#2ecc71; }
+.bg-travelling { background:#3498db; }
+.bg-assigned { background:#f1c40f; }
+.bg-on-hold { background:#e74c3c; }
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<header>
+    <h1><i class="fas fa-map"></i> Admin Dashboard</h1>
+</header>
+
+<div class="admin-card">
+
+<div class="filter-controls">
+    <input type="date" id="filterDate">
+    <input type="text" id="searchLocation" placeholder="Enter city">
+
+    <button onclick="setCustomLocation()">Set Location</button>
+
+    <select id="distanceFilter">
+        <option value="all">All Distance</option>
+        <option value="50">50 KM</option>
+        <option value="100">100 KM</option>
+        <option value="200">200 KM</option>
+    </select>
+
+    <button onclick="loadMapData()">Filter</button>
+</div>
+
+<div id="map"></div>
+
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+<script>
+// 🔥 SUPABASE
+const SUPABASE_URL = "https://tgmxpawrrsxphsmsqfyz.supabase.co";
+const SUPABASE_KEY = "YOUR_KEY"; // put your key
+const supa = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// GLOBAL
+let map;
+let markers = [];
+let adminLat = null;
+let adminLng = null;
+let selectedLat = null;
+let selectedLng = null;
+let locationMarker = null;
+let radiusCircle = null;
+
+// INIT MAP
+function initMap(){
+    map = L.map('map').setView([28.6139,77.2090], 10);
+
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png')
+        .addTo(map);
+
+    document.getElementById('filterDate').value =
+        new Date().toISOString().split('T')[0];
+
+    navigator.geolocation.getCurrentPosition((pos)=>{
+        adminLat = pos.coords.latitude;
+        adminLng = pos.coords.longitude;
+
+        map.setView([adminLat, adminLng], 10);
+        loadMapData();
+    }, ()=>{
+        loadMapData();
+    });
+}
+
+// SET CUSTOM LOCATION
+async function setCustomLocation(){
+    const place = document.getElementById('searchLocation').value;
+
+    if(!place) return alert("Enter location");
+
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${place}`);
+    const data = await res.json();
+
+    if(!data.length) return alert("Location not found");
+
+    selectedLat = parseFloat(data[0].lat);
+    selectedLng = parseFloat(data[0].lon);
+
+    map.setView([selectedLat, selectedLng], 10);
+
+    if(locationMarker) map.removeLayer(locationMarker);
+
+    locationMarker = L.marker([selectedLat, selectedLng])
+        .addTo(map)
+        .bindPopup("Selected Location")
+        .openPopup();
+
+    drawCircle();
+    loadMapData();
+}
+
+// DRAW DISTANCE CIRCLE
+function drawCircle(){
+    if(radiusCircle) map.removeLayer(radiusCircle);
+
+    const distance = document.getElementById('distanceFilter').value;
+    if(distance === "all") return;
+
+    const baseLat = selectedLat || adminLat;
+    const baseLng = selectedLng || adminLng;
+
+    if(!baseLat) return;
+
+    radiusCircle = L.circle([baseLat, baseLng], {
+        radius: distance * 1000,
+        color: "blue",
+        fillOpacity: 0.2
+    }).addTo(map);
+}
+
+// LOAD DATA FROM SUPABASE
+async function loadMapData(){
+
+    const dateVal = document.getElementById('filterDate').value;
+
+    let query = supa.from("engineer_tracking").select("*");
+
+    if(dateVal){
+        query = query.eq("date", dateVal);
+    }
+
+    const { data, error } = await query;
+
+    console.log("DATA:", data);
+    console.log("ERROR:", error);
+
+    if(error){
+        alert("Error fetching data");
+        return;
+    }
+
+    markers.forEach(m => map.removeLayer(m));
+    markers = [];
+
+    const selectedDistance = document.getElementById('distanceFilter').value;
+
+    data.forEach(rec => {
+
+        if(rec.latitude && rec.longitude){
+
+            const baseLat = selectedLat || adminLat;
+            const baseLng = selectedLng || adminLng;
+
+            let distance = 0;
+
+            if(baseLat && baseLng){
+                distance = getDistance(baseLat, baseLng, rec.latitude, rec.longitude);
+            }
+
+            if(selectedDistance !== "all" && distance > parseInt(selectedDistance)){
+                return;
+            }
+
+            let statusClass = "bg-available";
+            const status = (rec.status || "").toLowerCase();
+
+            if(status.includes("travelling")) statusClass = "bg-travelling";
+            else if(status.includes("assigned")) statusClass = "bg-assigned";
+            else if(status.includes("hold")) statusClass = "bg-on-hold";
+
+            const icon = L.divIcon({
+                className: `custom-marker ${statusClass}`,
+                iconSize: [16,16]
+            });
+
+            const marker = L.marker([rec.latitude, rec.longitude], {icon})
+                .addTo(map)
+                .bindPopup(`
+                    <b>${rec.engineer}</b><br>
+                    Status: ${rec.status}<br>
+                    City: ${rec.city}<br>
+                    Distance: ${distance.toFixed(2)} KM
+                `);
+
+            markers.push(marker);
+        }
+    });
+
+    drawCircle();
+}
+
+// DISTANCE FUNCTION
+function getDistance(lat1, lon1, lat2, lon2){
+    const R = 6371;
+
+    const dLat = (lat2-lat1) * Math.PI/180;
+    const dLon = (lon2-lon1) * Math.PI/180;
+
+    const a =
+        Math.sin(dLat/2)**2 +
+        Math.cos(lat1*Math.PI/180) *
+        Math.cos(lat2*Math.PI/180) *
+        Math.sin(dLon/2)**2;
+
+    return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+}
+
+// FILTER CHANGE
+document.getElementById('distanceFilter').addEventListener('change', ()=>{
+    drawCircle();
+    loadMapData();
+});
+
+window.onload = initMap;
+
+</script>
+
+</body>
+</html>
