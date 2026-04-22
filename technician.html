@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Technician Panel</title>
+
+<style>
+body{
+    font-family:Arial;
+    background:#0f172a;
+    color:white;
+    margin:0;
+}
+
+.container{
+    max-width:800px;
+    margin:auto;
+    padding:20px;
+}
+
+.card{
+    background:#1e293b;
+    padding:20px;
+    border-radius:12px;
+}
+
+input, select{
+    width:100%;
+    padding:10px;
+    margin:10px 0;
+    border-radius:8px;
+    border:none;
+}
+
+button{
+    width:100%;
+    padding:10px;
+    background:#6366f1;
+    border:none;
+    color:white;
+    border-radius:8px;
+    cursor:pointer;
+}
+</style>
+</head>
+
+<body>
+
+<div class="container">
+<div class="card">
+
+<h2>Technician Dashboard</h2>
+    <div id="permissionGate">
+        <div class="gate-icon"><i class="fas fa-location-arrow"></i></div>
+        
+        <p style="color:#666;">GPS access is required to submit your field status.</p>
+        <button onclick="requestGPS()" class="gate-btn">Enable GPS & Fill Required Details</button>
+        <div id="gateError" style="color:#ef4444; margin-top:15px; font-weight:bold; display:none;">❌ Permission Denied. Please enable location.</div>
+    </div>
+
+
+ <div id="mainContent">
+        <div class="form-card">
+            <h3 style="margin-bottom:20px; color:#667eea;">Daily Tracking Form</h3>
+            <form id="trackingForm">
+                <div class="form-row">
+                    <div class="form-group"><label><i class="fas fa-user"></i> Name</label><input type="text" name="engineer" required></div>
+                    <div class="form-group"><label><i class="fas fa-id-card"></i> Emp ID</label><input type="text" name="employeeId" required></div>
+                </div>
+                <div class="form-row">
+
+                    <div class="form-group"><label><i class="fas fa-tasks"></i> Status</label>
+                        <select name="Status" required>
+                            <option value="">Select Status</option>
+                            <option>Assigned</option><option>Available</option><option>Travelling</option><option>On Hold</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group"><label>Latitude</label><input type="text" id="latitude" name="Latitude" readonly></div>
+                    <div class="form-group"><label>Longitude</label><input type="text" id="longitude" name="Longitude" readonly></div>
+                </div>
+                      <div class="form-group"><label><i class="fas fa-remarks"></i> Remarks</label><input type="text" name="Remarks"></div>
+                <div class="form-row">
+                <input type="hidden" id="city" name="city">
+                <button type="submit" class="submit-btn"><i class="fas fa-save"></i> Submit Record</button></div>
+            </form>
+            <div id="message"></div>
+        </div>
+    </div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+// 🔥 SUPABASE
+const supabaseClient = supabase.createClient(
+"https://tgmxpawrrsxphsmsqfyz.supabase.co",
+"YOUR_KEY"
+);
+
+// ---------------- ENGINEER GPS ----------------
+  
+function requestGPS() {
+    navigator.geolocation.getCurrentPosition((pos) => {
+        document.getElementById('permissionGate').style.display = 'none';
+        document.getElementById('mainContent').style.display = 'block';
+
+        document.getElementById('latitude').value = pos.coords.latitude.toFixed(6);
+        document.getElementById('longitude').value = pos.coords.longitude.toFixed(6);
+
+        setCity(pos.coords.latitude, pos.coords.longitude);
+    }, () => {
+        document.getElementById('gateError').style.display = 'block';
+    });
+}
+
+async function setCity(lat, lng) {
+    try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`);
+        const data = await res.json();
+        document.getElementById('city').value =
+            data.address.city || data.address.town || "Unknown";
+    } catch {
+        document.getElementById('city').value = "Unknown";
+    }
+}
+
+</script>
+
+</body>
+</html>
