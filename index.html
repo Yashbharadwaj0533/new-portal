@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NEXUS FSM</title>
+<title>INNOWORQ</title>
 
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
@@ -92,20 +92,7 @@ button {
     </div>
 </div>
 
-<!-- DASHBOARD -->
-<div id="dashboard">
-    <div class="container">
-        <h2>Nearest Technician Finder</h2>
 
-        <input type="text" id="ticketId" placeholder="Ticket ID">
-        <input type="text" id="locationInput" placeholder="Enter City (Delhi, Noida...)">
-
-        <button onclick="fetchLocation()">📍 Fetch Location</button>
-        <button onclick="findNearest()">⚡ Find Nearest Technician</button>
-
-        <div id="results"></div>
-    </div>
-</div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
@@ -120,10 +107,21 @@ let targetLat = null;
 let targetLng = null;
 
 // LOGIN
+<script>
 function login(){
-    document.getElementById("loginOverlay").style.display="none";
-    document.getElementById("dashboard").style.display="block";
+    const role = document.getElementById("role").value;
+
+    if(role === "engineer"){
+        window.location.href = "engineer.html";
+    }
+    else if(role === "admin"){
+        window.location.href = "admin.html";
+    }
+    else if(role === "technician"){
+        window.location.href = "technician.html"; // 
+    }
 }
+</script>
 
 // 🔥 GET CITY → LAT LNG
 async function fetchLocation(){
